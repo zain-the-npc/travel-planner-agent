@@ -1,11 +1,10 @@
 """
-MCP server exposing a `search_places` tool backed by Google Places API.
-This is your Week 1 starting file. Run it, connect it to Claude Desktop
-or your own LangGraph agent later, and confirm it works before moving on.
+MCP server exposing a `search_places` tool backed by Geoapify Places API.
+No credit card needed - free tier gives 3000 requests/day.
 
 Setup:
     pip install mcp requests python-dotenv
-    Set GOOGLE_PLACES_API_KEY in your .env
+    Get free key at geoapify.com, set GEOAPIFY_API_KEY in your .env
 
 Run:
     python places_server.py
@@ -18,45 +17,66 @@ from mcp.server.fastmcp import FastMCP
 
 load_dotenv()
 
-GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
+GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
 
 mcp = FastMCP("travel-places")
 
 
+def geocode_city(city: str):
+    """Turn a city name into lat/lon using Geoapify geocoding."""
+    url = "https://api.geoapify.com/v1/geocode/search"
+    params = {"text": city, "apiKey": GEOAPIFY_API_KEY, "limit": 1}
+    resp = requests.get(url, params=params, timeout=10).json()
+    features = resp.get("features", [])
+    if not features:
+        return None
+    lon, lat = features[0]["geometry"]["coordinates"]
+    return lat, lon
+
+
 @mcp.tool()
-def search_places(query: str, location_bias: str = "") -> str:
+def search_places(city: str, category: str = "tourism.sights") -> str:
     """
-    Search for places (attractions, restaurants, hotels) matching a query.
+    Search for places (attractions, restaurants, hotels) in a city.
 
     Args:
-        query: e.g. "top attractions in Istanbul" or "budget hotels near Sultanahmet"
-        location_bias: optional city/region to bias results, e.g. "Istanbul, Turkey"
+        city: e.g. "Istanbul, Turkey"
+        category: Geoapify category, common ones:
+            tourism.sights (attractions), catering.restaurant (food),
+            accommodation.hotel (hotels)
 
     Returns:
-        A formatted string list of place names, ratings, and addresses.
+        A formatted string list of place names and addresses.
     """
-    if not GOOGLE_PLACES_API_KEY:
-        return "ERROR: GOOGLE_PLACES_API_KEY not set in .env"
+    if not GEOAPIFY_API_KEY:
+        return "ERROR: GEOAPIFY_API_KEY not set in .env"
 
-    full_query = f"{query} {location_bias}".strip()
-    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": full_query, "key": GOOGLE_PLACES_API_KEY}
+    coords = geocode_city(city)
+    if not coords:
+        return f"Could not find location: {city}"
+    lat, lon = coords
 
-    resp = requests.get(url, params=params, timeout=10)
-    data = resp.json()
+    url = "https://api.geoapify.com/v2/places"
+    params = {
+        "categories": category,
+        "filter": f"circle:{lon},{lat},10000",  # 10km radius
+        "limit": 10,
+        "apiKey": GEOAPIFY_API_KEY,
+    }
+    resp = requests.get(url, params=params, timeout=10).json()
+    features = resp.get("features", [])
 
-    if data.get("status") != "OK":
-        return f"No results or API error: {data.get('status')}"
+    if not features:
+        return "No places found."
 
-    results = data.get("results", [])[:8]
     lines = []
-    for place in results:
-        name = place.get("name", "Unknown")
-        rating = place.get("rating", "N/A")
-        address = place.get("formatted_address", "")
-        lines.append(f"- {name} (rating: {rating}) — {address}")
+    for f in features:
+        props = f.get("properties", {})
+        name = props.get("name", "Unknown")
+        address = props.get("formatted", "")
+        lines.append(f"- {name} — {address}")
 
-    return "\n".join(lines) if lines else "No places found."
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
