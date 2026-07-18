@@ -219,6 +219,10 @@
       <label for="date">Departure date</label>
       <input id="date" type="date" required>
     </div>
+    <div class="field full">
+      <label for="budget">Total budget (USD)</label>
+      <input id="budget" type="number" placeholder="500" required min="1">
+    </div>
     <button type="submit" id="submitBtn">Plan my trip</button>
   </form>
 
@@ -245,6 +249,7 @@
       const destAirport = document.getElementById('destAirport').value.toUpperCase();
       const destCity = document.getElementById('destCity').value;
       const date = document.getElementById('date').value;
+      const budget = parseFloat(document.getElementById('budget').value);
 
       const btn = document.getElementById('submitBtn');
       const status = document.getElementById('status');
@@ -264,6 +269,7 @@
             destination_airport: destAirport,
             destination_city: destCity,
             departure_date: date,
+            budget: budget,
           }),
         });
 

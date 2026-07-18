@@ -1,25 +1,23 @@
 """
-FastAPI backend - wraps the LangGraph travel agent as a web API.
+FastAPI backend - wraps the multi-agent LangGraph (researcher + budget)
+as a web API.
 
-Run:
+Run (from project ROOT folder):
     py -m uvicorn backend.app.main:app --reload --port 8000
-    (run this from the project ROOT folder, not inside backend/)
 """
 
+import sys
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.prebuilt import create_react_agent
 
-load_dotenv()
+# Allow importing from backend/agents/
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agents"))
+from travel_agent_multi import build_graph  # noqa: E402
 
 app = FastAPI(title="Travel Planner Agent API")
 
-# Allow the frontend (running on a different port) to call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,50 +25,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-PLACES_SERVER = os.path.join(THIS_DIR, "..", "mcp_servers", "places_server.py")
-FLIGHTS_SERVER = os.path.join(THIS_DIR, "..", "mcp_servers", "flights_server.py")
-
-# Built once, reused across requests
-_agent = None
+_graph = None
 
 
-async def get_agent():
-    global _agent
-    if _agent is None:
-        client = MultiServerMCPClient(
-            {
-                "places": {"command": "py", "args": [PLACES_SERVER], "transport": "stdio"},
-                "flights": {"command": "py", "args": [FLIGHTS_SERVER], "transport": "stdio"},
-            }
-        )
-        tools = await client.get_tools()
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-        _agent = create_react_agent(llm, tools)
-    return _agent
+def get_graph():
+    global _graph
+    if _graph is None:
+        _graph = build_graph()
+    return _graph
 
 
 class TripRequest(BaseModel):
-    origin: str          # e.g. "LHR"
-    destination_city: str  # e.g. "Istanbul"
-    destination_airport: str  # e.g. "IST"
-    departure_date: str  # e.g. "2026-09-15"
+    origin: str
+    destination_city: str
+    destination_airport: str
+    departure_date: str
+    budget: float
 
 
 @app.post("/plan-trip")
 async def plan_trip(req: TripRequest):
-    agent = await get_agent()
-
-    prompt = (
-        f"Plan a short trip to {req.destination_city}. "
-        f"I'm flying from {req.origin} to {req.destination_airport} "
-        f"on {req.departure_date}. Give me 3 flight options with prices, "
-        f"and 4 attractions to visit. Format clearly with headers."
+    graph = get_graph()
+    result = await graph.ainvoke(
+        {
+            "origin": req.origin,
+            "destination_city": req.destination_city,
+            "destination_airport": req.destination_airport,
+            "departure_date": req.departure_date,
+            "budget": req.budget,
+        }
     )
-
-    result = await agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
-    answer = result["messages"][-1].content
-    return {"answer": answer}
+    return {"answer": result["final_answer"]}
 
 
 @app.get("/health")
