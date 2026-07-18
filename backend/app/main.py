@@ -1,6 +1,6 @@
 """
 FastAPI backend - wraps the multi-agent LangGraph (researcher + budget)
-as a web API.
+as a web API, plus a standalone currency conversion endpoint.
 
 Run (from project ROOT folder):
     py -m uvicorn backend.app.main:app --reload --port 8000
@@ -8,11 +8,11 @@ Run (from project ROOT folder):
 
 import sys
 import os
+import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Allow importing from backend/agents/
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agents"))
 from travel_agent_multi import build_graph  # noqa: E402
 
@@ -55,7 +55,48 @@ async def plan_trip(req: TripRequest):
             "budget": req.budget,
         }
     )
-    return {"answer": result["final_answer"]}
+    return {"answer": result["final_answer"], "total_cost_usd": result["total_cost_usd"]}
+
+
+class ConvertRequest(BaseModel):
+    amount: float
+    from_currency: str
+    to_currency: str
+
+
+@app.post("/convert-currency")
+async def convert_currency(req: ConvertRequest):
+    """
+    Direct currency conversion - NOT routed through the LangGraph agent.
+    Called only when the user clicks the convert button on the results screen.
+    Uses the same Frankfurter API logic as the currency_server MCP tool,
+    called directly here to avoid subprocess overhead for a simple button click.
+    """
+    from_curr = req.from_currency.upper()
+    to_curr = req.to_currency.upper()
+
+    resp = requests.get(
+        f"https://api.frankfurter.dev/v2/rate/{from_curr}/{to_curr}",
+        timeout=10,
+    )
+
+    if resp.status_code >= 400:
+        return {"error": f"API error {resp.status_code}"}
+
+    data = resp.json()
+    rate = data.get("rate")
+
+    if rate is None:
+        return {"error": f"Could not find rate for {from_curr} -> {to_curr}"}
+
+    converted = req.amount * rate
+    return {
+        "converted_amount": round(converted, 2),
+        "rate": rate,
+        "from_currency": from_curr,
+        "to_currency": to_curr,
+        "date": data.get("date"),
+    }
 
 
 @app.get("/health")

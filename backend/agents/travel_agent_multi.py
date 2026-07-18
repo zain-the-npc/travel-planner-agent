@@ -35,6 +35,7 @@ class TripState(TypedDict):
     budget: float
     research_output: str
     final_answer: str
+    total_cost_usd: float
 
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -85,10 +86,30 @@ async def budget_node(state: TripState) -> dict:
         "add ~$40/day for food+local transport over a 4-day trip, and check if the "
         "total (flight + hotel + food/transport) fits the budget. "
         "If it doesn't fit, say what to cut or suggest cheaper options. "
-        "Respond with a clear final itinerary + full budget breakdown, formatted with headers."
+        "Respond with a clear final itinerary + full budget breakdown, formatted with headers. "
+        "On the VERY LAST LINE of your response, output exactly this format with no extra text: "
+        "TOTAL_USD: <number>  (just the final total cost in USD as a plain number, no $ sign, no commas)"
     )
     response = await llm.ainvoke(prompt)
-    return {"final_answer": response.content}
+    content = response.content
+
+    # Extract the structured total from the last line, then strip it from the displayed text
+    total_usd = 0.0
+    lines = content.strip().split("\n")
+    if lines and lines[-1].strip().startswith("TOTAL_USD:"):
+        try:
+            total_usd = float(lines[-1].split("TOTAL_USD:")[1].strip())
+        except ValueError:
+            total_usd = 0.0
+        content = "\n".join(lines[:-1]).strip()
+    else:
+        # Fallback: LLM didn't follow the format - grab the largest $ amount mentioned
+        import re
+        amounts = re.findall(r"\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:USD)?", content)
+        cleaned = [float(a.replace(",", "")) for a in amounts if a]
+        total_usd = max(cleaned) if cleaned else 0.0
+
+    return {"final_answer": content, "total_cost_usd": total_usd}
 
 
 def build_graph():

@@ -42,6 +42,7 @@ function App() {
           answer={response.answer}
           route={`${request.origin} → ${request.destination_airport}`}
           date={request.departure_date}
+          totalCostUsd={response.total_cost_usd}
         />
       )}
       {state === 'error' && <ErrorState message={errorMsg} />}

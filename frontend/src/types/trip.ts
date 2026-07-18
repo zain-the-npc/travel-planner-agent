@@ -8,4 +8,20 @@ export interface TripRequest {
 
 export interface TripResponse {
   answer: string;
+  total_cost_usd: number;
+}
+
+export interface ConvertRequest {
+  amount: number;
+  from_currency: string;
+  to_currency: string;
+}
+
+export interface ConvertResponse {
+  converted_amount: number;
+  rate: number;
+  from_currency: string;
+  to_currency: string;
+  date: string;
+  error?: string;
 }
