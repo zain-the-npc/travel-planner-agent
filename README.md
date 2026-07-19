@@ -18,10 +18,13 @@ Two nodes, not one giant agent:
 
 **APIs:** 
 
-Duffel (flights)
-StayAPI/Booking.com (hotels)
-Geoapify (places) 
-Frankfurter/ECB (currency, no key needed)
+- Duffel (flights)
+
+- StayAPI/Booking.com (hotels)
+
+- Geoapify (places) 
+
+- Frankfurter/ECB (currency, no key needed)
 
 ## Screenshots
 
