@@ -4,26 +4,35 @@ A multi-agent system that plans real trips — live flights, hotels, and attract
 
 ## How it works
 
-**MCP** = the tools (flight search, hotel search, places, currency — each its own server, no intelligence, just execution).
-**LangGraph** = the orchestrator (decides what step runs next, holds shared state).
-**GPT-4o-mini** = the brain (decides which tools to call and reasons over the results).
+- **MCP (Model Context Protocol)** — each data source (flights, hotels, places, currency) is its own MCP server. MCP has no intelligence, it just executes a function when called.
+- **LangGraph** — orchestrates the workflow as a graph. Holds shared state, decides what step runs next.
+- **GPT-4o-mini** — the reasoning engine. Decides which MCP tools to call and interprets the results.
 
 Two nodes, not one giant agent:
-- **Researcher** — calls the MCP tools, gathers real flight/hotel/place data
-- **Budget agent** — pure reasoning, no tools. Checks the total against your budget, flags overruns
+- **Researcher node** — calls the MCP tools (Duffel for flights, StayAPI for hotels, Geoapify for places), gathers real data
+- **Budget node** — pure LLM reasoning, no tool calls. Takes the researcher's data, picks the cheapest sensible combo, checks it against the user's budget, flags overruns
 
 ## Stack
 
 `LangGraph` `MCP` `GPT-4o-mini` `FastAPI` `React + TypeScript` `Tailwind` `Framer Motion`
 
-Data: Duffel (flights), StayAPI (hotels), Geoapify (places), Frankfurter (currency)
+**APIs:** Duffel (flights), StayAPI/Booking.com (hotels), Geoapify (places), Frankfurter/ECB (currency, no key needed)
 
 ## Screenshots
 
+**Landing page** — form takes origin, destination, date, budget. Submitting triggers the LangGraph pipeline.
+
 ![Landing](./screenshots/ss-1.png)
-![Form](./screenshots/ss-2.png)
+
+**Researcher node output** — real flight and hotel prices pulled live from Duffel and StayAPI, rendered as markdown inside a custom card component.
+
 ![Results](./screenshots/ss-3.png)
-![Budget + currency](./screenshots/ss-4.png)
+
+**Budget node output** — a separate LLM call (no tools) reasons over the researcher's data, totals the cost, and checks it against the stated budget.
+
+![Budget](./screenshots/ss-4.png)
+
+**Currency conversion** — on-demand only, isolated from the main flow. Calls a dedicated FastAPI endpoint backed by live ECB rates via the Frankfurter API.
 
 ## Run it
 
