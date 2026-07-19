@@ -16,7 +16,15 @@ Two nodes, not one giant agent:
 
 `LangGraph` `MCP` `GPT-4o-mini` `FastAPI` `React + TypeScript` `Tailwind` `Framer Motion`
 
-**APIs:** Duffel (flights), StayAPI/Booking.com (hotels), Geoapify (places), Frankfurter/ECB (currency, no key needed)
+**APIs:** 
+
+- Duffel (flights)
+
+- StayAPI/Booking.com (hotels)
+
+- Geoapify (places) 
+
+- Frankfurter/ECB (currency, no key needed)
 
 ## Screenshots
 
